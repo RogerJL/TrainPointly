@@ -44,28 +44,28 @@ def get_ground_level(pcd, plot=False):
     return limits[index + 1]
 
 #%% read file containing point cloud data
-pcd = np.load("dataset1.npy")
+pcd1 = np.load("dataset1.npy")
 
-pcd.shape
+pcd1.shape
 
 #%% show downsampled data in external window
 
 plt.figure("Dataset 1")
-show_cloud(pcd)
+show_cloud(pcd1)
 
-print(f"min {np.min(pcd, axis=0)}, max {np.max(pcd, axis=0)}")
+print(f"min {np.min(pcd1, axis=0)}, max {np.max(pcd1, axis=0)}")
 
 if False:
     cut1 = 90
-    cut = pcd[np.logical_and(cut1 < pcd[:,1],  pcd[:,1] < cut1 + 1)]
+    cut = pcd1[np.logical_and(cut1 < pcd1[:, 1], pcd1[:, 1] < cut1 + 1)]
     show_scatter(cut[:,0], cut[:, 2])
 
     cut2 = 120
-    cut = pcd[np.logical_and(cut2 < pcd[:,1],  pcd[:,1] < cut2 + 1)]
+    cut = pcd1[np.logical_and(cut2 < pcd1[:, 1], pcd1[:, 1] < cut2 + 1)]
     show_scatter(cut[:,0], cut[:, 2])
 
     cut3 = 150
-    cut = pcd[np.logical_and(cut3 < pcd[:,1],  pcd[:,1] < cut3 + 1)]
+    cut = pcd1[np.logical_and(cut3 < pcd1[:, 1], pcd1[:, 1] < cut3 + 1)]
     show_scatter(cut[:,0], cut[:, 2])
 
 #show_cloud(pcd[::10]) # keep every 10th point
@@ -85,17 +85,17 @@ Report the ground level in the readme file in your github project
 Add the histogram plots to your project readme
 '''
 plt.figure("Dataset 1 - Histograms of height")
-est_ground_level = get_ground_level(pcd, plot=True)  # 61.83
+est_ground_level = get_ground_level(pcd1, plot=True)  # 61.83
 
 print(est_ground_level)
 
-pcd_above_ground = pcd[pcd[:,2] > est_ground_level] 
+pcd1_above_ground = pcd1[pcd1[:, 2] > est_ground_level]
 #%%
-pcd_above_ground.shape
+pcd1_above_ground.shape
 
 #%% side view
 plt.figure("Dataset 1 - removed ground")
-show_cloud(pcd_above_ground)
+show_cloud(pcd1_above_ground)
 
 #%%
 pcd2 = np.load("dataset2.npy")
@@ -112,27 +112,27 @@ plt.figure("Dataset 2 - removed ground")
 show_cloud(pcd2_above_ground)
 
 # %%
-unoptimal_eps = 10
+bad_eps = 10
 # find the elbow
-clustering = DBSCAN(eps = unoptimal_eps, min_samples=5).fit(pcd_above_ground)
+clustering_bad = DBSCAN(eps = bad_eps, min_samples=7).fit(pcd1_above_ground)
 
 #%%
-clusters = len(set(clustering.labels_)) - (1 if -1 in clustering.labels_ else 0)
-colors = [plt.cm.Spectral(each) for each in np.linspace(0, 1, clusters)]
+clusters = len(set(clustering_bad.labels_)) - (1 if -1 in clustering_bad.labels_ else 0)
+colors = [plt.cm.jet(each) for each in np.linspace(0, 1, clusters)]
 
 # %%
 # Plotting resulting clusters
-plt.figure(figsize=(10,10))
-plt.scatter(pcd_above_ground[:,0], 
-            pcd_above_ground[:,1],
-            c=clustering.labels_,
+plt.figure("clusters-bad", figsize=(10,10))
+plt.scatter(pcd1_above_ground[:, 0],
+            pcd1_above_ground[:, 1],
+            c=clustering_bad.labels_,
             cmap=matplotlib.colors.ListedColormap(colors),
             s=2)
 
 
-plt.title('DBSCAN: %d clusters' % clusters,fontsize=20)
-plt.xlabel('x axis',fontsize=14)
-plt.ylabel('y axis',fontsize=14)
+plt.title(f'DBSCAN: {clusters} clusters eps={bad_eps}, {np.sum(clustering_bad.labels_ == -1)} noice', fontsize=20)
+plt.xlabel('x axis', fontsize=14)
+plt.ylabel('y axis', fontsize=14)
 plt.show()
 
 #%%
@@ -152,7 +152,62 @@ Add the elbow plots to your github project Readme
 Add the cluster plots to your github project Readme
 '''
 
+#%%
+# https://www.analyticsvidhya.com/blog/2020/09/how-dbscan-clustering-works/
+# https://machinelearningknowledge.ai/tutorial-for-dbscan-clustering-in-python-sklearn/
 
+from sklearn.neighbors import NearestNeighbors
+from kneed import KneeLocator
+
+def determine_elbow(pcd_above_ground_, id="", plot=False):
+
+    neigh = NearestNeighbors(n_neighbors=2)
+    nbrs = neigh.fit(pcd_above_ground_)
+    distances, indices = nbrs.kneighbors(pcd_above_ground_)
+    distances = np.sort(distances, axis=0)
+    distances = distances[:, 1]
+
+    i = np.arange(len(distances))
+    # polynomial gives knees before joint, not great in this case
+    knee = KneeLocator(i, distances, S=1, curve='convex', direction='increasing', interp_method='interp1d')
+
+    if plot:
+        #fig = plt.figure("elbow" + str(id), figsize=(5, 5))
+        knee.plot_knee(title="Elbow plot " + str(id), xlabel="Points", ylabel="Distance")
+        plt.show()
+
+    return distances[knee.knee]
+
+eps1 = determine_elbow(pcd1_above_ground, id=1, plot=True)
+eps2 = determine_elbow(pcd2_above_ground, id=2, plot=True)
+# %%
+min_samples = 2
+# find the elbow
+clustering1 = DBSCAN(eps=eps1, min_samples=min_samples).fit(pcd1_above_ground)
+clustering2 = DBSCAN(eps=eps2, min_samples=min_samples).fit(pcd2_above_ground)
+
+#%%
+def show_clustering(pcd_above_ground, clustering, eps=-1.0, min_neighbours="unknown", id=""):
+    clusters = len(set(clustering.labels_)) - (1 if -1 in clustering.labels_ else 0)
+    colors = [plt.cm.jet(each) for each in np.linspace(0, 1, clusters)]
+    # Plotting resulting clusters
+    plt.figure("clusters" + str(id), figsize=(10, 10))
+    plt.scatter(pcd_above_ground[:, 0],
+                pcd_above_ground[:, 1],
+                c=clustering.labels_,
+                cmap=matplotlib.colors.ListedColormap(colors),
+                s=1.5)
+
+    plt.title(f'DBSCAN({eps:.3f}, {min_neighbours}): {clusters} clusters, {np.sum(clustering.labels_ == -1)} noice',
+              fontsize=20)
+    plt.xlabel('x axis', fontsize=14)
+    plt.ylabel('y axis', fontsize=14)
+    plt.show()
+
+show_clustering(pcd1_above_ground, clustering1, eps=eps1, min_neighbours=min_samples, id=1)
+show_clustering(pcd2_above_ground, clustering2, eps=eps2, min_neighbours=min_samples, id=2)
+
+# %%
 
 
 #%%
