@@ -10,13 +10,13 @@ Try to create commits and version for each task.
 
 '''
 #%%
+%matplotlib qt
 import matplotlib
 import numpy as np
 from scipy.spatial import KDTree
 from sklearn.cluster import DBSCAN
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-
 
 #%% utility functions
 def show_cloud(points_plt):
@@ -28,9 +28,20 @@ def show_scatter(x,y):
     plt.scatter(x, y)
     plt.show()
 
-def get_ground_level(pcd):
-    return 64
+def get_ground_level(pcd, plot=False):
+    bins = 200
+    h, limits = np.histogram(pcd[:,2], bins=bins, density=False)
+    index_max = np.argmax(h)
+    index = index_max
+    while h[index + 1] < h[index]:  # decreasing
+        index += 1
+    print(index_max, limits[index_max + 1], index, limits[index + 1], h[:index + 10])
 
+    if plot:
+        width = np.diff(limits)  # calculate bar width
+        plt.bar(limits[:-1] + 0.5 * width, height=h, width=width)
+
+    return limits[index + 1]
 
 #%% read file containing point cloud data
 pcd = np.load("dataset1.npy")
@@ -38,8 +49,25 @@ pcd = np.load("dataset1.npy")
 pcd.shape
 
 #%% show downsampled data in external window
-%matplotlib qt
+
+plt.figure("Dataset 1")
 show_cloud(pcd)
+
+print(f"min {np.min(pcd, axis=0)}, max {np.max(pcd, axis=0)}")
+
+if False:
+    cut1 = 90
+    cut = pcd[np.logical_and(cut1 < pcd[:,1],  pcd[:,1] < cut1 + 1)]
+    show_scatter(cut[:,0], cut[:, 2])
+
+    cut2 = 120
+    cut = pcd[np.logical_and(cut2 < pcd[:,1],  pcd[:,1] < cut2 + 1)]
+    show_scatter(cut[:,0], cut[:, 2])
+
+    cut3 = 150
+    cut = pcd[np.logical_and(cut3 < pcd[:,1],  pcd[:,1] < cut3 + 1)]
+    show_scatter(cut[:,0], cut[:, 2])
+
 #show_cloud(pcd[::10]) # keep every 10th point
 
 #%% remove ground plane
@@ -56,7 +84,9 @@ For both the datasets
 Report the ground level in the readme file in your github project
 Add the histogram plots to your project readme
 '''
-est_ground_level = get_ground_level(pcd)
+plt.figure("Dataset 1 - Histograms of height")
+est_ground_level = get_ground_level(pcd, plot=True)  # 61.83
+
 print(est_ground_level)
 
 pcd_above_ground = pcd[pcd[:,2] > est_ground_level] 
@@ -64,8 +94,22 @@ pcd_above_ground = pcd[pcd[:,2] > est_ground_level]
 pcd_above_ground.shape
 
 #%% side view
+plt.figure("Dataset 1 - removed ground")
 show_cloud(pcd_above_ground)
 
+#%%
+pcd2 = np.load("dataset2.npy")
+plt.figure("Dataset 2")
+show_cloud(pcd2)
+print(f"min {np.min(pcd2, axis=0)}, max {np.max(pcd2, axis=0)}")
+#%%
+plt.figure("Dataset 2 - Histograms of height")
+est2_ground_level = get_ground_level(pcd2, plot=True)
+print(est2_ground_level)  # 61.97
+
+pcd2_above_ground = pcd2[pcd2[:,2] > est2_ground_level]
+plt.figure("Dataset 2 - removed ground")
+show_cloud(pcd2_above_ground)
 
 # %%
 unoptimal_eps = 10
@@ -90,7 +134,6 @@ plt.title('DBSCAN: %d clusters' % clusters,fontsize=20)
 plt.xlabel('x axis',fontsize=14)
 plt.ylabel('y axis',fontsize=14)
 plt.show()
-
 
 #%%
 '''
